@@ -10,6 +10,7 @@ public section.
   methods CONSTRUCTOR
     importing
       !IV_BOPF_NAME type CSEQUENCE
+      !IV_TECH type ABAP_BOOL optional
       !IV_NODE type /BOBF/OBM_NODE_KEY optional
     raising
       /BOBF/CX_FRW .
@@ -178,6 +179,12 @@ private section.
   methods _UPDATE_ROOT_NODE
     importing
       !IO_GRID type ref to CL_GUI_ALV_GRID .
+  methods _GET_CHANGE_MESSAGES
+    importing
+      !IV_SEVERITY type CSEQUENCE optional
+      !CV_HAS_CHANGE type ref to ABAP_BOOL optional
+    returning
+      value(RO_MESSAGES) type ref to ZCL_BOPF_MESSAGES .
 ENDCLASS.
 
 
@@ -189,6 +196,7 @@ METHOD constructor.
   mo_manager    = zcl_bopf_manager=>create( iv_bopf_name ).
   mo_metadata   = mo_manager->mo_metadata.
 
+  mv_tech       = iv_tech.
   mv_node       = COND #( WHEN iv_node IS NOT INITIAL THEN iv_node
                           ELSE mo_metadata->mv_root_node ).
   SELECT SINGLE description INTO mv_node_name
@@ -227,7 +235,7 @@ METHOD show_alv.
                   hotspot   = abap_true )
                   INTO lt_catalog INDEX 1.
   INSERT VALUE #( fieldname = 'V_ASSOC_ICON'
-                  col_pos   = 2
+                  col_pos   = 1
                   coltext   = lv_nbsp_title
                   hotspot   = abap_true
                   tech      = COND #( WHEN mo_assoc->mt_assoc IS INITIAL THEN abap_true ) )
@@ -264,12 +272,25 @@ ENDMETHOD.
 METHOD show_selection_screen.
   DATA(lo_screen) = lcl_dynamic_screen=>create_node_based( me ).
 
+  DATA(lt_pbo) = VALUE zcl_eui_screen=>tt_customize(
+    ( name     = 'V_MAX_ROW'                                "#EC NOTEXT
+      required = '1'
+      label    = 'Maximum row count'(mrc) )
+    ( name     = 'V_EDIT_MODE'                              "#EC NOTEXT
+     required = '1' ) ).
+
+  _get_node_info( IMPORTING et_catalog = DATA(lt_catalog) ).
+  LOOP AT lt_catalog ASSIGNING FIELD-SYMBOL(<ls_catalog>) WHERE domname = '/BOBF/CONF_KEY'.
+    IF <ls_catalog>-coltext(1) = '*'.
+      CHECK <ls_catalog>-coltext = '*KEY' AND mv_tech = abap_true.
+    ENDIF.
+
+    APPEND VALUE #( name  = <ls_catalog>-fieldname
+                    label = <ls_catalog>-coltext ) TO lt_pbo[].
+  ENDLOOP.
+
   lo_screen->show(
-    EXPORTING it_pbo = VALUE #( ( name     = 'V_MAX_ROW'    "#EC NOTEXT
-                                  required = '1'
-                                  label    = 'Maximum row count'(mrc) )
-                                 ( name     = 'V_EDIT_MODE' "#EC NOTEXT
-                                  required = '1' ) )
+    EXPORTING it_pbo     = lt_pbo
     IMPORTING ev_cancel  = DATA(lv_cancel) ).
   CHECK lv_cancel <> abap_true.
 
@@ -503,13 +524,11 @@ ENDMETHOD.
 
 
 METHOD _execute_save.
-  LOOP AT zcl_bopf_manager=>mt_all_managers ASSIGNING FIELD-SYMBOL(<ls_cache>).
-    IF NEW zcl_bopf_messages( iv_severity = 'AXE'
-                )->add_from_manager( <ls_cache>-manager
-                )->show( ) = abap_true.
-      RETURN.
-    ENDIF.
-  ENDLOOP.
+  DATA(lo_messages) = _get_change_messages( iv_severity = 'AXE' ).
+  IF lo_messages->mt_logs[] IS NOT INITIAL.
+    lo_messages->show( ).
+    RETURN.
+  ENDIF.
 
   TRY.
       mo_manager->save(
@@ -526,6 +545,15 @@ METHOD _execute_save.
 
   CHECK lv_ok = abap_true.
   MESSAGE |'{ mv_node_name }' saved| TYPE 'S'.
+ENDMETHOD.
+
+
+METHOD _get_change_messages.
+  ro_messages = NEW #( iv_severity = iv_severity ).
+  LOOP AT zcl_bopf_manager=>mt_all_managers ASSIGNING FIELD-SYMBOL(<ls_cache>).
+    ro_messages->add_from_manager( io_manager    = <ls_cache>-manager
+                                   cv_has_change = cv_has_change ).
+  ENDLOOP.
 ENDMETHOD.
 
 
@@ -578,6 +606,9 @@ METHOD _get_node_info.
                                      THEN <ls_catalog>-fieldname ).
     IF <ls_catalog>-fieldname IS NOT INITIAL.
       <ls_catalog>-tech      = xsdbool( mv_tech <> abap_true ).
+      <ls_catalog>-coltext   = |*{ <ls_catalog>-parameter0 }|.
+      <ls_catalog>-col_pos   = 2.
+      <ls_catalog>-edit      = abap_false.
     ELSE.
       lv_index               = lv_index + 1.
       <ls_catalog>-fieldname = |C{ lv_index }|.
@@ -779,6 +810,9 @@ METHOD _on_hotspot_click.
       mo_assoc->show_all_assoc( is_line = <ls_line>
                                 io_grid = sender ).
 
+      lcl_tab_info=>refresh_grid( io_grid    = sender
+                                  iv_message = ''
+                                  iv_refresh = abap_false ).
   ENDCASE.
 ENDMETHOD.
 
@@ -873,9 +907,16 @@ ENDMETHOD.
 
 
 METHOD _on_pbo_event.
-  DATA(lo_grid) = CAST zcl_eui_alv( sender )->get_grid( ).
-  CHECK lo_grid IS NOT INITIAL.
-  lo_grid->set_toolbar_interactive( ).
+  DATA(lo_alv)  = CAST zcl_eui_alv( sender ).
+  DATA(lo_grid) = lo_alv->get_grid( ).
+  IF lo_grid IS NOT INITIAL.
+    lo_grid->set_toolbar_interactive( ).
+  ENDIF.
+
+  DATA(lr_has_change) = NEW abap_bool( ).
+  _get_change_messages( cv_has_change = lr_has_change ).
+  lo_alv->ms_status-exclude = COND #( WHEN lr_has_change->* <> abap_true
+                                      THEN VALUE #( ( 'SAVE' ) ) ).
 ENDMETHOD.
 
 

@@ -9,6 +9,7 @@ CLASS lcl_main IMPLEMENTATION.
     TRY.
         DATA(lo_ui_node) = NEW zcl_bopf_ui_node(
           iv_bopf_name = _bo_name
+          iv_tech      = _tech
         ).
         DATA(lr_table) = lo_ui_node->show_selection_screen( ).
         CHECK lr_table IS NOT INITIAL.

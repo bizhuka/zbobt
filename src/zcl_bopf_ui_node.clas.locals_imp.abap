@@ -51,6 +51,11 @@ CLASS lcl_dynamic_screen IMPLEMENTATION.
         CHECK <ls_catalog>-tech <> abap_true.
       ENDIF.
 
+      " Only by KEY field
+      IF <ls_catalog>-coltext(1) = '*'.
+        CHECK <ls_catalog>-coltext = '*KEY'.
+      ENDIF.
+
       TRY.
           DATA(lr_type) = zcl_eui_type=>create_type_descr(
                "ir_type       = REF #( <lv_field> )
@@ -191,9 +196,14 @@ CLASS lcl_tab_info IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD refresh_grid.
-    DATA(lv_message) = |{ iv_message }.{ COND #( WHEN iv_msgty <> 'E' THEN ` Press SAVE to make change permanent` ) }|.
-    MESSAGE lv_message TYPE 'S' DISPLAY LIKE iv_msgty.
-    io_grid->refresh_table_display( is_stable = VALUE #( row = 'X' ) ).
+    IF iv_refresh = abap_true.
+      DATA(lv_message) = |{ iv_message }.{ COND #( WHEN iv_msgty <> 'E' THEN ` Press SAVE to make change permanent` ) }|.
+      MESSAGE lv_message TYPE 'S' DISPLAY LIKE iv_msgty.
+      io_grid->refresh_table_display( is_stable = VALUE #( row = 'X' ) ).
+    ENDIF.
+
+    cl_gui_cfw=>set_new_ok_code( new_code = 'JUST_4_PBO' ).
+    cl_gui_cfw=>flush( EXCEPTIONS OTHERS = 0 ).
   ENDMETHOD.
 
   METHOD _get_flat_comps.
@@ -622,10 +632,10 @@ CLASS lcl_assoc IMPLEMENTATION.
         <ls_assoc>-_bo = get_bo_info( <ls_assoc> ).
         DATA(lo_sub_node) = NEW zcl_bopf_ui_node(
          iv_bopf_name  = ls_bo_obj-name
-         iv_node       = ls_bo_obj-target_node ).
+         iv_node       = ls_bo_obj-target_node
+         iv_tech       = mo_owner->mv_tech ).
 
         lo_sub_node->mo_parent      = mo_owner.
-        lo_sub_node->mv_tech        = mo_owner->mv_tech.
         lo_sub_node->mv_edit_mode   = mo_owner->mv_edit_mode.
         lo_sub_node->ms_assoc       = <ls_assoc>.
         lo_sub_node->ms_create_info = ls_create_info.

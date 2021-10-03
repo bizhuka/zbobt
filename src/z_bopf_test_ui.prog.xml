@@ -238,6 +238,12 @@
      <LENGTH>9</LENGTH>
      <SPLIT>D</SPLIT>
     </item>
+    <item>
+     <ID>S</ID>
+     <KEY>_TECH</KEY>
+     <ENTRY>Tech mode</ENTRY>
+     <LENGTH>24</LENGTH>
+    </item>
    </TPOOL>
   </asx:values>
  </asx:abap>

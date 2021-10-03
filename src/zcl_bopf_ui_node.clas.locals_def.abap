@@ -79,6 +79,7 @@ CLASS lcl_tab_info DEFINITION FINAL.
 
       refresh_grid
         IMPORTING io_grid    TYPE REF TO cl_gui_alv_grid
+                  iv_refresh TYPE abap_bool DEFAULT abap_true
                   iv_message TYPE csequence
                   iv_msgty   TYPE symsgty DEFAULT 'S'.
     METHODS:
