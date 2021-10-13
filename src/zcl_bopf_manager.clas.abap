@@ -17,9 +17,13 @@ public section.
   data MO_TRANSACTION type ref to /BOBF/IF_TRA_TRANSACTION_MGR read-only .
   class-data MT_ALL_MANAGERS type TT_CACHE read-only .
 
+  methods CONSTRUCTOR
+    importing
+      !IV_LOG type ABAP_BOOL .
   class-methods CREATE
     importing
       !IV_BOPF_NAME type CSEQUENCE
+      !IV_LOG type ABAP_BOOL optional
     returning
       value(RO_MANAGER) type ref to ZCL_BOPF_MANAGER
     raising
@@ -92,6 +96,17 @@ public section.
       !EV_OK type ABAP_BOOL
     raising
       /BOBF/CX_FRW .
+  methods DO_ACTION
+    importing
+      !IV_ACT_KEY type /BOBF/ACT_KEY
+      !IT_KEY type /BOBF/T_FRW_KEY optional
+      !IS_PARAMETERS type ref to DATA optional
+    exporting
+      !EO_CHANGE type ref to /BOBF/IF_TRA_CHANGE
+      !EO_MESSAGE type ref to /BOBF/IF_FRW_MESSAGE
+      !ET_FAILED_KEY type /BOBF/T_FRW_KEY
+      !ET_FAILED_ACTION_KEY type /BOBF/T_FRW_KEY
+      !ET_DATA type INDEX TABLE .
   methods SAVE
     exporting
       !EV_OK type ABAP_BOOL
@@ -100,6 +115,8 @@ public section.
       /BOBF/CX_FRW .
 protected section.
 private section.
+
+  data MO_LOGGER type ref to LCL_LOGGER .
 
   methods _CHECK_HAS_ERRORS
     importing
@@ -121,6 +138,13 @@ ENDCLASS.
 CLASS ZCL_BOPF_MANAGER IMPLEMENTATION.
 
 
+METHOD constructor.
+  IF iv_log = abap_true.
+    mo_logger = NEW #( me ).
+  ENDIF.
+ENDMETHOD.
+
+
 METHOD create.
   ASSIGN mt_all_managers[ name = iv_bopf_name ] TO FIELD-SYMBOL(<ls_cache>).
   IF sy-subrc = 0.
@@ -130,7 +154,7 @@ METHOD create.
 
   " 1 isntance only
   INSERT VALUE #( name    = iv_bopf_name
-                  manager = NEW #( ) ) INTO TABLE mt_all_managers[] ASSIGNING <ls_cache>.
+                  manager = NEW #( iv_log ) ) INTO TABLE mt_all_managers[] ASSIGNING <ls_cache>.
 
   ro_manager  = <ls_cache>-manager.
   DATA(lo_metadata) = NEW zcl_bopf_metadata( iv_bopf_name ).
@@ -139,6 +163,28 @@ METHOD create.
 
   CHECK lo_metadata->mv_select_all IS NOT INITIAL.
   ro_manager->mo_service = /bobf/cl_tra_serv_mgr_factory=>get_service_manager( lo_metadata->mv_bo_key ).
+ENDMETHOD.
+
+
+METHOD do_action.
+  mo_service->do_action(
+    EXPORTING iv_act_key           = iv_act_key
+              it_key               = it_key
+              is_parameters        = is_parameters
+    IMPORTING eo_change            = eo_change
+              eo_message           = eo_message
+              et_failed_key        = et_failed_key
+              et_failed_action_key = et_failed_action_key
+              et_data              = et_data ).
+
+  CHECK mo_logger IS NOT INITIAL.
+  mo_logger->add( io_message = eo_message
+                  iv_ok      = xsdbool( et_failed_key[] IS INITIAL AND et_failed_action_key[] IS INITIAL )
+                  is_action  = VALUE #(
+                   action_node = iv_act_key
+                   t_key       = it_key
+                   r_params    = is_parameters
+                  ) ).
 ENDMETHOD.
 
 
@@ -158,7 +204,15 @@ METHOD modify.
     ev_ok = abap_false.
   ENDIF.
 
-  CHECK eo_message IS NOT REQUESTED.
+  IF mo_logger IS NOT INITIAL.
+    mo_logger->add(
+       it_modification = it_modification
+       iv_ok           = ev_ok
+       io_message      = eo_message ).
+  ENDIF.
+
+  CHECK eo_message IS NOT REQUESTED
+    AND mo_logger IS INITIAL.  " No errors if show logs
   _check_has_errors( eo_message ).
 ENDMETHOD.
 

@@ -193,7 +193,8 @@ CLASS ZCL_BOPF_UI_NODE IMPLEMENTATION.
 
 
 METHOD constructor.
-  mo_manager    = zcl_bopf_manager=>create( iv_bopf_name ).
+  mo_manager    = zcl_bopf_manager=>create( iv_bopf_name = iv_bopf_name
+                                            iv_log       = iv_tech ).
   mo_metadata   = mo_manager->mo_metadata.
 
   mv_tech       = iv_tech.
@@ -320,7 +321,8 @@ METHOD _execute_check_exit.
     DATA(lr_alv_table) = zcl_eui_conv=>get_grid_table( io_grid ).
     ASSIGN lr_alv_table->* TO <lt_table>.
 
-    READ TABLE <lt_table> TRANSPORTING NO FIELDS WITH KEY ('v_log_icon') = icon_protocol.
+    READ TABLE <lt_table> WITH KEY ('v_log_icon') = icon_protocol "#EC CI_ANYSEQ
+      TRANSPORTING NO FIELDS.
     IF sy-subrc = 0.
       cv_close = abap_false.
       MESSAGE 'Please fix warnings'(fix) TYPE 'S' DISPLAY LIKE 'E'.
@@ -1022,8 +1024,8 @@ METHOD _refresh_line.
     INSERT <ls_bopf_ui> INTO <lt_table> INDEX iv_new_index ASSIGNING <ls_line>.
   ELSE.
     ASSIGN mo_tab_info->mr_table->* TO <lt_table>.
-    READ TABLE <lt_table> WITH KEY ('KEY') = iv_key ASSIGNING <ls_line>.
-
+    READ TABLE <lt_table> ASSIGNING <ls_line>       "#EC CI_ANYSEQ
+      WITH KEY ('KEY') = iv_key.
     IF sy-subrc <> 0.
       zcx_eui_no_check=>raise_sys_error( iv_message = |{ iv_key } not found in ALV| ).
     ENDIF.

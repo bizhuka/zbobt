@@ -395,7 +395,7 @@ CLASS lcl_action IMPLEMENTATION.
       CHECK sy-subrc = 0.
 
       ASSIGN COMPONENT 'KEY' OF STRUCTURE <ls_line> TO FIELD-SYMBOL(<lv_key>) CASTING TYPE /bobf/conf_key.
-      mo_owner->mo_manager->mo_service->do_action(
+      mo_owner->mo_manager->do_action(
         EXPORTING iv_act_key    = <ls_action>-act_key
                   it_key        = VALUE #( ( key = <lv_key> ) )
                   is_parameters = ls_parameters

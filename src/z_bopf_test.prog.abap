@@ -11,8 +11,9 @@ REPORT z_bopf_test.
 *& Selection Screen Definition                                        *
 *&--------------------------------------------------------------------*
 
-PARAMETERS p_order TYPE /bobf/demo_sales_order_id.
-SELECTION-SCREEN SKIP.
+PARAMETERS: p_order TYPE /bobf/demo_sales_order_id,
+            p_log   AS CHECKBOX DEFAULT 'X'.
+SELECTION-SCREEN SKIP 1.
 
 SELECTION-SCREEN:
   BEGIN OF BLOCK blk_toolbar,
@@ -135,7 +136,8 @@ CLASS lcl_order_processor IMPLEMENTATION.
   ENDMETHOD.                 " METHOD constructor
 
   METHOD init.
-    mo_manager = zcl_bopf_manager=>create( '/BOBF/DEMO_SALES_ORDER' ).
+    mo_manager = zcl_bopf_manager=>create( iv_bopf_name = '/BOBF/DEMO_SALES_ORDER'
+                                           iv_log       = p_log ).
   ENDMETHOD.
 
   METHOD create_order.
@@ -250,7 +252,7 @@ CLASS lcl_order_processor IMPLEMENTATION.
       "Call the BOPF action to process the delivery:
       DATA(lr_s_parameters) = NEW /bobf/s_demo_sales_order_hdr_d( item_no = <ls_item>-item_no ).
 
-      mo_manager->mo_service->do_action(
+      mo_manager->do_action(
         EXPORTING
           iv_act_key    = /bobf/if_demo_sales_order_c=>sc_action-root-deliver
           it_key        = VALUE #( ( key = lv_key ) )
@@ -271,7 +273,7 @@ CLASS lcl_order_processor IMPLEMENTATION.
 
     "If there are no line items, perform the delivery against the header only:
     CHECK lt_items->*[] IS INITIAL.
-    mo_manager->mo_service->do_action(
+    mo_manager->do_action(
       EXPORTING
         iv_act_key    = /bobf/if_demo_sales_order_c=>sc_action-root-deliver
         it_key        = VALUE #( ( key = lv_key ) )
@@ -331,7 +333,8 @@ CLASS lcl_order_processor IMPLEMENTATION.
        data        = lr_s_text ) ).
 
     "Apply the changes:
-    DATA(lo_manager) = zcl_bopf_manager=>create( '/BOBF/DEMO_CUSTOMER' ).
+    DATA(lo_manager) = zcl_bopf_manager=>create( iv_bopf_name = '/BOBF/DEMO_CUSTOMER'
+                                                 iv_log       = p_log ).
     lo_manager->modify( EXPORTING it_modification = lt_mod
                         IMPORTING eo_message      = DATA(lo_message) ).
 
@@ -376,7 +379,8 @@ CLASS lcl_order_processor IMPLEMENTATION.
        data        = lr_s_text ) ).
 
     "Apply the changes:
-    DATA(lo_manager) = zcl_bopf_manager=>create( '/BOBF/DEMO_PRODUCT' ).
+    DATA(lo_manager) = zcl_bopf_manager=>create( iv_bopf_name = '/BOBF/DEMO_PRODUCT'
+                                                 iv_log       = p_log ).
     lo_manager->modify( EXPORTING it_modification = lt_mod
                         IMPORTING eo_message      = DATA(lo_message) ).
 

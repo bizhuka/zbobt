@@ -34,22 +34,29 @@ public section.
       !ER_DATA_TABLE type ref to DATA
     raising
       /BOBF/CX_FRW .
+  methods GET_INTF_NODE_NAME
+    importing
+      !IV_NODE type /BOBF/OBM_NODE_KEY
+    exporting
+      !EV_NAME type STRING
+      !EV_FULL_NAME type STRING .
+  methods GET_INTF_NODE_NAME_NESTED
+    importing
+      !IV_NODE type /BOBF/OBM_NODE_KEY
+      !IV_STRUC type CSEQUENCE
+    exporting
+      !EV_NAME type STRING
+      !EV_FULL_NAME type STRING .
 protected section.
 private section.
 
+  data MV_INTERFACE type SEOCLASS-CLSNAME .
   data MV_SELECT_ALL type /BOBF/OBM_QUERY_KEY .
   data MV_SELECT_BY_ELEMENTS type /BOBF/OBM_QUERY_KEY .
 
-  methods _GET_ROOT_NODE_NAME
-    importing
-      !IV_INTERFACE type CSEQUENCE
-      !IV_ROOT_NODE type /BOBF/OBM_NODE_KEY
-    returning
-      value(RV_ROOT_NAME) type STRING .
   methods _GET_QUERY
     importing
       !IV_QUERY type CSEQUENCE
-      !IV_INTERFACE type CSEQUENCE
       !IV_ROOT_NAME type CSEQUENCE
     returning
       value(RV_QUERY_KEY) type /BOBF/OBM_QUERY_KEY
@@ -76,37 +83,85 @@ METHOD constructor.
   ENDIF.
 
   mv_bo_key    = ls_obj-bo_key.
+  mv_interface = ls_obj-const_interface.
   mo_config    = /bobf/cl_frw_factory=>get_configuration( mv_bo_key ).
 
   mv_root_node = ls_obj-root_node_key.
-  DATA(lv_root_name) = _get_root_node_name( iv_interface = ls_obj-const_interface
-                                            iv_root_node = mv_root_node ).
+  get_intf_node_name( EXPORTING iv_node = mv_root_node
+                      IMPORTING ev_name = DATA(lv_root_name) ).
   IF lv_root_name IS INITIAL.
     zcl_bopf_messages=>raise_error( iv_message = |ROOT node in '{ mv_bopf_name }' is not found| ).
   ENDIF.
 
   IF ls_obj-objcat = /bobf/if_conf_c=>sc_objcat_bo OR ls_obj-objcat = /bobf/if_conf_c=>sc_objcat_mdo.
     mv_select_all = _get_query( iv_query     = 'SELECT_ALL'
-                                iv_interface = ls_obj-const_interface
                                 iv_root_name = lv_root_name ).
     mv_select_by_elements = _get_query( iv_query     = 'SELECT_BY_ELEMENTS'
-                                        iv_interface = ls_obj-const_interface
                                         iv_root_name = lv_root_name ).
   ENDIF.
 
   " Check 'ROOT' node
-  DATA(lv_name) = |{ ls_obj-const_interface }=>SC_NODE-{ lv_root_name }|.
+  DATA(lv_name) = |{ mv_interface }=>SC_NODE-{ lv_root_name }|.
   ASSIGN (lv_name) TO FIELD-SYMBOL(<lv_root_node>) CASTING TYPE /bobf/obm_node_key.
   IF mv_root_node <> <lv_root_node>.
     zcl_bopf_messages=>raise_error( iv_message = |Wrong version of '{ mv_bopf_name }' was loaded| ).
   ENDIF.
 
   " Check BO key
-  lv_name = |{ ls_obj-const_interface }=>SC_BO_KEY|.
+  lv_name = |{ mv_interface }=>SC_BO_KEY|.
   ASSIGN (lv_name) TO FIELD-SYMBOL(<lv_bo_key>) CASTING TYPE /bobf/obm_bo_key.
   IF sy-subrc <> 0 OR ls_obj-bo_key <> ls_obj-bo_key.
     zcl_bopf_messages=>raise_error( iv_message = |Wrong version of '{ mv_bopf_name }' was loaded| ).
   ENDIF.
+ENDMETHOD.
+
+
+METHOD get_intf_node_name.
+  CLEAR: ev_name,
+         ev_full_name.
+
+  " All nodes
+  DATA(lv_name) = |{ mv_interface }=>SC_NODE|.
+  ASSIGN (lv_name) TO FIELD-SYMBOL(<ls_sc_node>).
+  DATA(lo_struc) = CAST cl_abap_structdescr( cl_abap_structdescr=>describe_by_data( <ls_sc_node> ) ).
+
+  LOOP AT lo_struc->components ASSIGNING FIELD-SYMBOL(<ls_comp>).
+    DATA(lv_full_name) = |{ mv_interface }=>SC_NODE-{ <ls_comp>-name }|.
+    ASSIGN (lv_full_name) TO FIELD-SYMBOL(<lv_node_key>).
+    CHECK <lv_node_key> = iv_node.
+
+    ev_name      = <ls_comp>-name.
+    ev_full_name = lv_full_name.
+    RETURN.
+  ENDLOOP.
+ENDMETHOD.
+
+
+METHOD get_intf_node_name_nested.
+  CLEAR: ev_name,
+         ev_full_name.
+
+  " All nodes
+  DATA(lv_name) = |{ mv_interface }=>{ iv_struc }|.
+  ASSIGN (lv_name) TO FIELD-SYMBOL(<ls_sc_node>).
+  DATA(lo_struc) = CAST cl_abap_structdescr( cl_abap_structdescr=>describe_by_data( <ls_sc_node> ) ).
+
+  LOOP AT lo_struc->components ASSIGNING FIELD-SYMBOL(<ls_comp>).
+    DATA(lv_assoc_name) = |{ mv_interface }=>{ iv_struc }-{ <ls_comp>-name }|.
+    ASSIGN (lv_assoc_name) TO FIELD-SYMBOL(<lv_node_stuc>).
+
+    " Structure in structure %)
+    DATA(lo_struc2) = CAST cl_abap_structdescr( cl_abap_structdescr=>describe_by_data( <lv_node_stuc> ) ).
+    LOOP AT lo_struc2->components ASSIGNING FIELD-SYMBOL(<ls_comp2>).
+      DATA(lv_full_name) = |{ mv_interface }=>{ iv_struc }-{ <ls_comp>-name }-{ <ls_comp2>-name }|.
+      ASSIGN (lv_full_name) TO FIELD-SYMBOL(<lv_node_key>).
+      CHECK <lv_node_key> = iv_node.
+
+      ev_name      = <ls_comp>-name.
+      ev_full_name = lv_full_name.
+      RETURN.
+    ENDLOOP.
+  ENDLOOP.
 ENDMETHOD.
 
 
@@ -179,29 +234,12 @@ ENDMETHOD.
 
 
 METHOD _get_query.
-  DATA(lv_name) = |{ iv_interface }=>SC_QUERY-{ iv_root_name }-{ iv_query }|.
+  DATA(lv_name) = |{ mv_interface }=>SC_QUERY-{ iv_root_name }-{ iv_query }|.
   ASSIGN (lv_name) TO FIELD-SYMBOL(<lv_query_key>) CASTING TYPE /bobf/obm_query_key.
   IF sy-subrc <> 0.
     zcl_bopf_messages=>raise_error( iv_message = |{ iv_query } node in '{ mv_bopf_name }' is not found| ).
   ENDIF.
 
   rv_query_key = <lv_query_key>.
-ENDMETHOD.
-
-
-METHOD _get_root_node_name.
-  " All nodes
-  DATA(lv_name) = |{ iv_interface }=>SC_NODE|.
-  ASSIGN (lv_name) TO FIELD-SYMBOL(<ls_sc_node>).
-  DATA(lo_struc) = CAST cl_abap_structdescr( cl_abap_structdescr=>describe_by_data( <ls_sc_node> ) ).
-
-  LOOP AT lo_struc->components ASSIGNING FIELD-SYMBOL(<ls_comp>).
-    lv_name = |{ iv_interface }=>SC_NODE-{ <ls_comp>-name }|.
-    ASSIGN (lv_name) TO FIELD-SYMBOL(<lv_node_key>).
-    CHECK <lv_node_key> = iv_root_node.
-
-    rv_root_name = <ls_comp>-name.
-    RETURN.
-  ENDLOOP.
 ENDMETHOD.
 ENDCLASS.

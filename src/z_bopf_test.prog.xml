@@ -17,6 +17,12 @@
     </item>
     <item>
      <ID>S</ID>
+     <KEY>P_LOG</KEY>
+     <ENTRY>Log changes</ENTRY>
+     <LENGTH>19</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
      <KEY>P_ORDER</KEY>
      <ENTRY>.</ENTRY>
      <LENGTH>9</LENGTH>
