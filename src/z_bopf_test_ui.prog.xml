@@ -12,7 +12,7 @@
    <CUA>
     <ADM>
      <ACTCODE>000001</ACTCODE>
-     <PFKCODE>000002</PFKCODE>
+     <PFKCODE>000003</PFKCODE>
     </ADM>
     <STA>
      <RSMPE_STAT>
@@ -24,6 +24,13 @@
       <INT_NOTE>Ok + Cancel full screen</INT_NOTE>
      </RSMPE_STAT>
      <RSMPE_STAT>
+      <CODE>MEMO_STATUS</CODE>
+      <MODAL>P</MODAL>
+      <PFKCODE>000003</PFKCODE>
+      <BUTCODE>0001</BUTCODE>
+      <INT_NOTE>MEMO status</INT_NOTE>
+     </RSMPE_STAT>
+     <RSMPE_STAT>
       <CODE>PICK_BO_STATUS</CODE>
       <MODAL>P</MODAL>
       <PFKCODE>000002</PFKCODE>
@@ -32,6 +39,15 @@
      </RSMPE_STAT>
     </STA>
     <FUN>
+     <RSMPE_FUNT>
+      <CODE>COPY_CODE</CODE>
+      <TEXTNO>001</TEXTNO>
+      <TEXT_TYPE>S</TEXT_TYPE>
+      <TEXT_NAME>ICON_SYSTEM_COPY</TEXT_NAME>
+      <ICON_ID>@2U@</ICON_ID>
+      <FUN_TEXT>Copy to clipboard</FUN_TEXT>
+      <ICON_TEXT>Copy to clipboard</ICON_TEXT>
+     </RSMPE_FUNT>
      <RSMPE_FUNT>
       <CODE>CRET</CODE>
       <TEXTNO>001</TEXTNO>
@@ -89,6 +105,18 @@
       <NO>02</NO>
       <PFNO>12</PFNO>
      </RSMPE_BUT>
+     <RSMPE_BUT>
+      <PFK_CODE>000003</PFK_CODE>
+      <CODE>0001</CODE>
+      <NO>01</NO>
+      <PFNO>02</PFNO>
+     </RSMPE_BUT>
+     <RSMPE_BUT>
+      <PFK_CODE>000003</PFK_CODE>
+      <CODE>0001</CODE>
+      <NO>02</NO>
+      <PFNO>12</PFNO>
+     </RSMPE_BUT>
     </BUT>
     <PFK>
      <RSMPE_PFK>
@@ -139,6 +167,18 @@
       <FUNCODE>PICK_ONE</FUNCODE>
       <FUNNO>001</FUNNO>
      </RSMPE_PFK>
+     <RSMPE_PFK>
+      <CODE>000003</CODE>
+      <PFNO>02</PFNO>
+      <FUNCODE>COPY_CODE</FUNCODE>
+      <FUNNO>001</FUNNO>
+     </RSMPE_PFK>
+     <RSMPE_PFK>
+      <CODE>000003</CODE>
+      <PFNO>12</PFNO>
+      <FUNCODE>DCAN</FUNCODE>
+      <FUNNO>001</FUNNO>
+     </RSMPE_PFK>
     </PFK>
     <SET>
      <RSMPE_STAF>
@@ -156,6 +196,14 @@
      <RSMPE_STAF>
       <STATUS>EDIT_STATUS</STATUS>
       <FUNCTION>SAVE</FUNCTION>
+     </RSMPE_STAF>
+     <RSMPE_STAF>
+      <STATUS>MEMO_STATUS</STATUS>
+      <FUNCTION>COPY_CODE</FUNCTION>
+     </RSMPE_STAF>
+     <RSMPE_STAF>
+      <STATUS>MEMO_STATUS</STATUS>
+      <FUNCTION>DCAN</FUNCTION>
      </RSMPE_STAF>
      <RSMPE_STAF>
       <STATUS>PICK_BO_STATUS</STATUS>
@@ -196,14 +244,28 @@
       <OBJ_CODE>000002</OBJ_CODE>
       <MODAL>P</MODAL>
       <NORM>X</NORM>
-      <INT_NOTE>Ok + Cancel popup</INT_NOTE>
+      <INT_NOTE>Pick 1 item</INT_NOTE>
      </RSMPE_ATRT>
      <RSMPE_ATRT>
       <OBJ_TYPE>B</OBJ_TYPE>
       <OBJ_CODE>000002</OBJ_CODE>
       <SUB_CODE>0001</SUB_CODE>
       <MODAL>P</MODAL>
-      <INT_NOTE>Ok + Cancel popup</INT_NOTE>
+      <INT_NOTE>Pick 1 item</INT_NOTE>
+     </RSMPE_ATRT>
+     <RSMPE_ATRT>
+      <OBJ_TYPE>P</OBJ_TYPE>
+      <OBJ_CODE>000003</OBJ_CODE>
+      <MODAL>P</MODAL>
+      <NORM>X</NORM>
+      <INT_NOTE>MEMO status</INT_NOTE>
+     </RSMPE_ATRT>
+     <RSMPE_ATRT>
+      <OBJ_TYPE>B</OBJ_TYPE>
+      <OBJ_CODE>000003</OBJ_CODE>
+      <SUB_CODE>0001</SUB_CODE>
+      <MODAL>P</MODAL>
+      <INT_NOTE>MEMO status</INT_NOTE>
      </RSMPE_ATRT>
     </DOC>
     <TIT>

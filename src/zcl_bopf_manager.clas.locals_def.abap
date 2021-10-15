@@ -5,7 +5,17 @@
 CLASS lcl_logger DEFINITION FINAL.
   PUBLIC SECTION.
     TYPES:
-      char32_tab TYPE STANDARD TABLE OF /bobf/conf_ui_key WITH DEFAULT KEY,
+      tt_find_key TYPE STANDARD TABLE OF /bobf/s_frw_modification-key WITH DEFAULT KEY, " TYPE /bobf/t_frw_key2,
+
+      BEGIN OF ts_find_src,
+        key  TYPE /bobf/s_frw_modification-key,
+        node TYPE /bobf/s_frw_modification-node,
+      END OF ts_find_src,
+
+      BEGIN OF ts_find_res,
+        key_name  TYPE string,
+        node_name TYPE string,
+      END OF ts_find_res,
 
       BEGIN OF ts_action,
         r_params    TYPE REF TO data,
@@ -32,11 +42,13 @@ CLASS lcl_logger DEFINITION FINAL.
       tt_field TYPE STANDARD TABLE OF ts_field WITH DEFAULT KEY.
 
     DATA:
-      mo_owner TYPE REF TO zcl_bopf_manager,
-      mo_menu  TYPE REF TO zcl_eui_menu,
+      mo_owner    TYPE REF TO zcl_bopf_manager,
+      mo_menu     TYPE REF TO zcl_eui_menu,
 
-      mt_log   TYPE tt_log,
-      mr_log   TYPE REF TO ts_log.
+      mt_log      TYPE tt_log,
+      mr_log      TYPE REF TO ts_log,
+
+      mt_all_code TYPE tttext255.
 
     METHODS:
       constructor
@@ -57,6 +69,10 @@ CLASS lcl_logger DEFINITION FINAL.
         IMPORTING e_row_id
                   e_column_id,
 
+      _on_memo_pai FOR EVENT pai_event OF zif_eui_manager
+        IMPORTING
+          iv_command,
+
       _on_data_hotspot_click FOR EVENT hotspot_click OF cl_gui_alv_grid
         IMPORTING e_row_id
                   e_column_id,
@@ -66,15 +82,20 @@ CLASS lcl_logger DEFINITION FINAL.
                   it_modif       TYPE /bobf/t_frw_modification
         RETURNING VALUE(rt_code) TYPE stringtab,
 
+      _insert_fields
+        IMPORTING
+          it_fields TYPE /bobf/s_frw_modification-changed_fields
+        CHANGING
+          ct_code   TYPE stringtab,
+
       _create_action
         IMPORTING
                   is_action      TYPE ts_action
         RETURNING VALUE(rt_code) TYPE stringtab,
 
-      _create_code
+      _show_abap_code
         IMPORTING
-                  it_code        TYPE stringtab
-        RETURNING VALUE(rv_code) TYPE string,
+          is_log TYPE ts_log,
 
       _show_structure
         IMPORTING
@@ -92,8 +113,15 @@ CLASS lcl_logger DEFINITION FINAL.
           ir_data  TYPE REF TO data
         EXPORTING
           ev_struc TYPE strukname
-          et_field TYPE tt_field.
+          et_field TYPE tt_field,
 
+      _find_with
+        IMPORTING
+                  is_find_src        TYPE ts_find_src
+                  iv_change_mode     TYPE /bobf/s_frw_modification-change_mode OPTIONAL
+                  ct_find_key        TYPE REF TO tt_find_key
+                  ct_decl            TYPE REF TO stringtab
+        RETURNING VALUE(rs_find_res) TYPE ts_find_res.
 ENDCLASS.
 
 CLASS zcl_bopf_manager DEFINITION LOCAL FRIENDS lcl_logger.

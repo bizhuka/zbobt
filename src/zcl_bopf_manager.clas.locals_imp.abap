@@ -87,65 +87,78 @@ CLASS lcl_logger IMPLEMENTATION.
         _show_structure( <ls_log>-s_action-r_params ).
 
       WHEN 'CODE'.
-        DATA(lv_code) = _create_code( COND #( WHEN <ls_log>-t_modif[] IS NOT INITIAL
-                                              THEN _create_modif( <ls_log>-t_modif )
-                                              ELSE _create_action( <ls_log>-s_action ) ) ).
-        NEW zcl_eui_memo( ir_text     = REF #( lv_code )
-                          iv_editable = abap_false
-        )->popup(
-        )->show( ).
+        _show_abap_code( <ls_log> ).
 
     ENDCASE.
   ENDMETHOD.
 
+  METHOD _show_abap_code.
+    DATA(lt_code_all) = VALUE stringtab( ( |  DATA(lo_manager) = zcl_bopf_manager=>create( '{ mo_owner->mo_metadata->mv_bopf_name }' ).| ) ).
+    DATA(lt_code) = COND #( WHEN is_log-t_modif[] IS NOT INITIAL
+                            THEN _create_modif( is_log-t_modif )
+                            ELSE _create_action( is_log-s_action ) ).
+    APPEND LINES OF lt_code TO lt_code_all.
+    APPEND |  NEW zcl_bopf_messages( )->add_from_message( lo_message )->show( ).|  TO lt_code_all.
+
+    " As fixed length table
+    mt_all_code = VALUE #( FOR lv_string IN lt_code_all ( CONV #( lv_string ) ) ).
+
+    " As string
+    DATA(lv_code) = concat_lines_of( table = lt_code_all sep = cl_abap_char_utilities=>cr_lf ).
+    NEW zcl_eui_memo( ir_text     = REF #( lv_code )
+                      iv_editable = abap_false
+    )->set_status( VALUE #( prog  = 'Z_BOPF_TEST_UI'
+                            name  = 'MEMO_STATUS'
+                            title = 'Generated code'(gen) )
+    )->popup(
+    )->show( io_handler      = me
+             iv_handlers_map = '_ON_MEMO_PAI' ).
+  ENDMETHOD.
+
+  METHOD _on_memo_pai.
+    CHECK iv_command = 'COPY_CODE'.
+
+    DATA(lv_rc) = 0.
+    cl_gui_frontend_services=>clipboard_export(
+       EXPORTING  no_auth_check = abap_true
+       IMPORTING  data          = mt_all_code
+       CHANGING   rc            = lv_rc
+       EXCEPTIONS OTHERS        = 1 ).
+
+    CHECK sy-subrc = 0.
+    MESSAGE 'Text copied to clipboard'(cop) TYPE 'S'.
+  ENDMETHOD.
+
   METHOD _create_modif.
     APPEND |  DATA(lt_mod) = VALUE /bobf/t_frw_modification(| TO rt_code.
-    DATA(lt_decl) = VALUE stringtab( ).
 
-    DATA lt_key TYPE STANDARD TABLE OF /bobf/s_frw_modification-key. " VALUE /bobf/t_frw_key2( ).
+    DATA(lt_decl) = VALUE stringtab( ( || ) ).
+    DATA(lt_find_key)        = VALUE tt_find_key( ).
+    DATA(ls_find_res)        = VALUE ts_find_res( ).
+    DATA(ls_find_res_source) = VALUE ts_find_res( ).
+
     LOOP AT it_modif ASSIGNING FIELD-SYMBOL(<ls_modif>).
       IF sy-tabix <> 1.
         APPEND INITIAL LINE TO rt_code.
       ENDIF.
 
-      DATA(lv_key_name)         = ||.
-      DATA(lv_node_name)        = ||.
-      DATA(lv_source_key_name)  = ||.
-      DATA(lv_source_node_node) = ||.
-
       DO 2 TIMES.
         CASE sy-index.
           WHEN 1.
-            DATA(lv_key)      = <ls_modif>-key.
-            DATA(lv_node)     = <ls_modif>-node.
-            DATA(lr_key_name) = REF #( lv_key_name ).
-            DATA(lr_node)     = REF #( lv_node_name ).
+            " Main pair
+            DATA(ls_find_src) = VALUE ts_find_src( key  = <ls_modif>-key
+                                                   node = <ls_modif>-node ).
+            ASSIGN ls_find_res TO FIELD-SYMBOL(<ls_find_res>).
           WHEN 2.
-            lv_key      = <ls_modif>-source_key.
-            lv_node     = <ls_modif>-source_node.
-            lr_key_name = REF #( lv_source_key_name ).
-            lr_node     = REF #( lv_source_node_node ).
+            " Related pair
+            ls_find_src = VALUE ts_find_src( key  = <ls_modif>-source_key
+                                             node = <ls_modif>-source_node ).
+            ASSIGN ls_find_res_source TO <ls_find_res>.
         ENDCASE.
-        CHECK lv_key IS NOT INITIAL.
-
-        DATA(lv_new_decl) = abap_false.
-        ASSIGN lt_key[ table_line = lv_key ] TO FIELD-SYMBOL(<lv_key>).
-        IF sy-subrc <> 0.
-          lv_new_decl = abap_true.
-          APPEND lv_key TO lt_key.
-        ENDIF.
-
-        lr_key_name->* = |lv_key{ sy-tabix }|.
-        mo_owner->mo_metadata->get_intf_node_name(
-         EXPORTING iv_node      = lv_node
-         IMPORTING ev_full_name = lr_node->* ).
-
-        CHECK lv_new_decl = abap_true.
-        IF <ls_modif>-change_mode = /bobf/if_frw_c=>sc_modify_create.
-          APPEND |  DATA({ lr_key_name->* }) = /bobf/cl_frw_factory=>get_new_key( ).| TO lt_decl.
-        ELSE.
-          APPEND |  DATA({ lr_key_name->* }) = `{ lv_key }`.| TO lt_decl.
-        ENDIF.
+        <ls_find_res> = _find_with( is_find_src    = ls_find_src
+                                    iv_change_mode = <ls_modif>-change_mode
+                                    ct_find_key    = REF #( lt_find_key )
+                                    ct_decl        = REF #( lt_decl ) ).
       ENDDO.
 
       " Only 3 change modes
@@ -155,21 +168,31 @@ CLASS lcl_logger IMPLEMENTATION.
            WHEN /bobf/if_frw_c=>sc_modify_update THEN |/BOBF/IF_FRW_C=>SC_MODIFY_UPDATE| ).
       DATA(lv_data) = _get_data_decl( ir_data     = <ls_modif>-data
                                       iv_key_val  = CONV #( <ls_modif>-key )
-                                      iv_key_name = lv_key_name ).
+                                      iv_key_name = ls_find_res-key_name ).
+      APPEND | ( key         = { ls_find_res-key_name }|      TO rt_code.
+      APPEND |   data        = { lv_data }|                  TO rt_code.
+      APPEND |   change_mode = { lv_change_mode }|           TO rt_code.
+      APPEND |   node        = { ls_find_res-node_name }|    TO rt_code.
 
-      APPEND | ( key         = { lv_key_name }|      TO rt_code.
-      APPEND |    data        = { lv_data }|         TO rt_code.
-      APPEND |    change_mode = { lv_change_mode }|  TO rt_code.
-      APPEND |    node        = { lv_node_name }|    TO rt_code.
+      _insert_fields( EXPORTING it_fields = <ls_modif>-changed_fields
+                      CHANGING  ct_code   = rt_code ).
 
-      IF lv_source_key_name IS NOT INITIAL.
+      IF ls_find_res_source IS NOT INITIAL.
         mo_owner->mo_metadata->get_intf_node_name_nested(
           EXPORTING iv_node      = <ls_modif>-association
                     iv_struc     = |SC_ASSOCIATION|
           IMPORTING ev_full_name = DATA(lv_assoc_node) ).
-        APPEND |    source_key  = { lv_source_key_name  }|  TO rt_code.
-        APPEND |    source_node = { lv_source_node_node }|  TO rt_code.
-        APPEND |    association = { lv_assoc_node }|        TO rt_code.
+        APPEND |   source_key  = { ls_find_res_source-key_name  }|  TO rt_code.
+        APPEND |   source_node = { ls_find_res_source-node_name }|  TO rt_code.
+        APPEND |   association = { lv_assoc_node }|                 TO rt_code.
+      ENDIF.
+
+      " IS INITIAL or eq SOURCE_KEY ?
+      DATA(ls_find_root) = _find_with( is_find_src = VALUE #( key = <ls_modif>-root_key )
+                                       ct_find_key = REF #( lt_find_key )
+                                       ct_decl     = REF #( lt_decl ) ).
+      IF ls_find_root-key_name IS NOT INITIAL.
+        APPEND |   root_key = { ls_find_root-key_name }| TO rt_code.
       ENDIF.
 
       ASSIGN rt_code[ lines( rt_code ) ] TO FIELD-SYMBOL(<lv_last_line>).
@@ -179,12 +202,51 @@ CLASS lcl_logger IMPLEMENTATION.
     ASSIGN rt_code[ lines( rt_code ) ] TO <lv_last_line>.
     <lv_last_line> = |{ <lv_last_line> } ).|.
 
-    INSERT LINES OF lt_decl INTO rt_code INDEX 3.
+    APPEND INITIAL LINE TO lt_decl.
+    INSERT LINES OF lt_decl INTO rt_code INDEX 1.
 
+    APPEND INITIAL LINE TO rt_code.
     APPEND |  lo_manager->modify( EXPORTING it_modification = lt_mod |             TO rt_code.
     APPEND |                      IMPORTING eo_message      = DATA(lo_message)|    TO rt_code.
     APPEND |                                ev_ok           = DATA(lv_ok) ).|      TO rt_code.
     APPEND |  CHECK lv_ok <> abap_true.|                                           TO rt_code.
+  ENDMETHOD.
+
+  METHOD _insert_fields.
+    CHECK it_fields IS NOT INITIAL.
+
+    DATA(lv_all_fields) = concat_lines_of(
+      table = VALUE stringtab( FOR lv_field IN it_fields ( |( `{ lv_field }` )| ) )
+      sep = ` ` ).
+
+    APPEND |   changed_fields = VALUE #( { lv_all_fields } )| TO ct_code.
+  ENDMETHOD.
+
+  METHOD _find_with.
+    CHECK is_find_src-key IS NOT INITIAL.
+
+    DATA(lv_new_decl) = abap_false.
+    ASSIGN ct_find_key->*[ table_line = is_find_src-key ] TO FIELD-SYMBOL(<lv_key>).
+    IF sy-subrc <> 0.
+      lv_new_decl = abap_true.
+      APPEND is_find_src-key TO ct_find_key->*.
+    ENDIF.
+
+    " Name of variable
+    rs_find_res-key_name = |lv_key{ sy-tabix }|.
+
+    IF lv_new_decl = abap_true.
+      DATA(lv_str_decl) = COND #( WHEN iv_change_mode = /bobf/if_frw_c=>sc_modify_create
+                                  THEN |  DATA({ rs_find_res-key_name }) = /bobf/cl_frw_factory=>get_new_key( ).|
+                                  ELSE |  DATA({ rs_find_res-key_name }) = `{ is_find_src-key }`.| ).
+      APPEND lv_str_decl TO ct_decl->*.
+    ENDIF.
+
+    " Name of node with BOPF INTERFACE
+    CHECK is_find_src-node IS NOT INITIAL.
+    mo_owner->mo_metadata->get_intf_node_name(
+     EXPORTING iv_node      = is_find_src-node
+     IMPORTING ev_full_name = rs_find_res-node_name ).
   ENDMETHOD.
 
   METHOD _create_action.
@@ -204,17 +266,6 @@ CLASS lcl_logger IMPLEMENTATION.
     APPEND |                         IMPORTING eo_message    = DATA(lo_message)|       TO rt_code.
     APPEND |                                   et_failed_key = DATA(lt_failed_key) ).| TO rt_code.
     APPEND |  CHECK lt_failed_key[] IS NOT INITIAL.|                                   TO rt_code.
-  ENDMETHOD.
-
-  METHOD _create_code.
-    DATA(lt_code) = VALUE stringtab( ( |  DATA(lo_manager) = zcl_bopf_manager=>create( '{ mo_owner->mo_metadata->mv_bopf_name }' ).| )
-                                     ( || ) ).
-    APPEND LINES OF it_code TO lt_code.
-
-    " Handle erros
-    APPEND |  NEW zcl_bopf_messages( )->add_from_message( lo_message )->show( ).|  TO lt_code.
-
-    rv_code = concat_lines_of( table = lt_code sep = cl_abap_char_utilities=>cr_lf ).
   ENDMETHOD.
 
   METHOD _get_data_decl.
