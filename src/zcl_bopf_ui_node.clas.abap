@@ -713,6 +713,14 @@ METHOD _on_data_changed_finished.
                                                  it_good_cells = et_good_cells
                                                  ir_refresh    = REF #( lv_grid_refresh_needed ) ).
     TRY.
+        " Data before update
+        DATA(lr_table) = lo_manager->retrieve_tab(
+               iv_node_type = lv_act_node
+               iv_edit_mode = /bobf/if_conf_c=>sc_edit_read_only
+               it_key       = VALUE #( ( key = <lv_key> ) ) ).
+        FIELD-SYMBOLS <lt_table_prev> TYPE INDEX TABLE.
+        ASSIGN lr_table->* TO <lt_table_prev>.
+
         lo_manager->modify(
               EXPORTING it_modification = VALUE #(
                             ( node        = lv_act_node " mv_node
@@ -748,7 +756,7 @@ METHOD _on_data_changed_finished.
     " yes, the current change is related to a row, which has been changed by the user
     LOOP AT lt_changed_nodes INTO DATA(ls_changed_node) WHERE key = <lv_key>.
       TRY.
-          DATA(lr_table) = lo_manager->retrieve_tab(
+          lr_table = lo_manager->retrieve_tab(
                  iv_node_type = lv_act_node
                  iv_edit_mode = mv_edit_mode
                  it_key       = VALUE #( ( key = ls_changed_node-key ) ) ).
@@ -762,7 +770,8 @@ METHOD _on_data_changed_finished.
       IF <lt_data> IS INITIAL OR lines( <lt_data> ) > 1.
         lv_grid_refresh_needed = abap_true.
       ELSE.
-        ASSIGN <lt_data>[ 1 ] TO FIELD-SYMBOL(<ls_data>).
+        ASSIGN: <lt_table_prev>[ 1 ] TO FIELD-SYMBOL(<ls_data_prev>),
+                <lt_data>[ 1 ]       TO FIELD-SYMBOL(<ls_data>).
 
         " compare new value <ls_data> with data after users change
         LOOP AT <lt_table> ASSIGNING <ls_line>.
@@ -773,7 +782,8 @@ METHOD _on_data_changed_finished.
           ASSIGN ls_data_user->* TO FIELD-SYMBOL(<ls_data_user>).
 
           " compare. refresh needed ?
-          CHECK <ls_data_user> NE <ls_data>.
+          CHECK <ls_data_user> NE <ls_data>
+             OR <ls_data_user> NE <ls_data_prev>.
           lv_grid_refresh_needed = abap_true.
           EXIT.
         ENDLOOP.
